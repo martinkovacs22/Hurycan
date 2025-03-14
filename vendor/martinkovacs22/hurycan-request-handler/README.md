@@ -1,2 +1,0 @@
-# HurycanRequestHandler
-Base request handler  
