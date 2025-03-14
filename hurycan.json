@@ -1,0 +1,7 @@
+{
+    "filepath":{
+        "dbstructure":"./db.xml",
+        "log":"./change_log.txt",
+        "configini":"./config.ini"
+    }
+}

@@ -1,0 +1,54 @@
+<?php
+
+echo "Hurycan CLI Tool 🚀\n";
+
+$jsonhurycan = __DIR__ . "/hurycan.json";
+
+// Argumentumok ellenőrzése
+if ($argc > 1) {
+    switch ($argv[1]) {
+        case 'i':
+        case 'install':
+            install();
+            break;
+
+        default:
+            echo "Ismeretlen parancs: {$argv[1]}\n";
+            break;
+    }
+}
+
+function install() {
+    global $jsonhurycan;
+    
+    echo "Telepítés megkezdése...\n";
+
+    // Ha a JSON fájl nem létezik, hibát ad
+    if (!file_exists($jsonhurycan)) {
+        echo "Hiba: A konfigurációs fájl ($jsonhurycan) nem található!\n";
+        return;
+    }
+
+    // JSON fájl beolvasása
+    $configData = json_decode(file_get_contents($jsonhurycan), true);
+
+    if (!isset($configData["filepath"])) {
+        echo "Hiba: A JSON fájl nem tartalmaz 'filepath' kulcsot!\n";
+        return;
+    }
+
+    // Fájlok ellenőrzése és létrehozása, ha nem léteznek
+    foreach ($configData["filepath"] as $key => $filePath) {
+        if (!file_exists($filePath)) {
+            echo "Fájl nem található: $filePath, létrehozás...\n";
+            file_put_contents($filePath, ""); // Üres fájl létrehozása
+            echo "✅ Fájl létrehozva: $filePath\n";
+        } else {
+            echo "✔️ Fájl már létezik: $filePath\n";
+        }
+    }
+
+    echo "✅ Telepítés befejezve.\n";
+}
+
+?>

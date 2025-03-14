@@ -1,0 +1,77 @@
+#!/usr/bin/env php
+<?php
+
+echo "Hurycan CLI Tool 🚀\n";
+
+// Argumentumok ellenőrzése
+if ($argc > 1) {
+    $command = $argv[1];
+
+    switch ($command) {
+        case 'setdb':
+            if (isset($argv[2]) && isset($argv[3]) && isset($argv[4]) && isset($argv[5]) && isset($argv[6])) {
+                $host = $argv[2];
+                $dbName = $argv[3];
+                $user = $argv[4];
+                $password = $argv[5];
+                $port = $argv[6];
+                
+                // Hívjuk meg a függvényt, hogy módosítsuk a config.ini fájlt
+                setDatabaseConfig($host, $dbName, $user, $password, $port);
+            } else {
+                echo "Hibás adatbázis kapcsolat paraméterek. A parancsnak így kell kinéznie: php bin/hurycan setdb <host> <dbname> <user> <password> <port>\n";
+            }
+            break;
+        default:
+            echo "Ismeretlen parancs: $command\n";
+            break;
+    }
+} else {
+    echo "Használat: hurycan [parancs]\n";
+}
+
+// Set Database Config Function
+function setDatabaseConfig($host, $dbName, $user, $password, $port) {
+    $configFile = 'src/config.ini';
+
+    // Ellenőrizzük, hogy a fájl létezik-e
+    if (!file_exists($configFile)) {
+        echo "A config.ini fájl nem található: $configFile\n";
+        return;
+    }
+
+    // Beolvassuk a config.ini fájlt
+    $configContent = file_get_contents($configFile);
+
+    // [db] szekció keresése
+    $dbSectionPattern = '/\[db\](.*?)\z/s'; // Az egész [db] szekciót keresjük, beleértve a hozzátartozó kulcsokat
+
+    if (preg_match($dbSectionPattern, $configContent, $matches)) {
+        $dbSection = $matches[1];
+
+        // A db_host, db_name, db_username, db_pass és db_port értékek módosítása
+        $updatedDbSection = preg_replace([
+            '/db_host\s*=\s*"?.*"?/',   // db_host változtatása
+            '/db_name\s*=\s*"?.*"?/',   // db_name változtatása
+            '/db_username\s*=\s*"?.*"?/',  // db_username változtatása
+            '/db_pass\s*=\s*"?.*"?/',    // db_pass változtatása
+            '/db_port\s*=\s*"?.*"?/'     // db_port változtatása
+        ], [
+            "db_host = \"$host\"",
+            "db_name = \"$dbName\"",
+            "db_username = \"$user\"",
+            "db_pass = \"$password\"",
+            "db_port = \"$port\""
+        ], $dbSection);
+
+        // A teljes fájlban a db szekció frissítése
+        $updatedContent = preg_replace($dbSectionPattern, "[db]\n$updatedDbSection", $configContent);
+
+        // Fájlba írás
+        file_put_contents($configFile, $updatedContent);
+
+        echo "Adatbázis beállítások frissítve: $host, $dbName, $user, $password, $port\n";
+    } else {
+        echo "A [db] szekció nem található a config.ini fájlban.\n";
+    }
+}
