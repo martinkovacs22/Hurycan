@@ -6,7 +6,11 @@
             "Controller\\": "src/Controller",
             "Database\\": "src/Database",
             "Service\\": "src/Service",
-            "Model\\": "src/Model"
+            "Model\\": "src/Model",
+            "Controller\\Config\\": "src/Controller/Config",
+            "Database\\Config\\": "src/Database/Config",
+            "Service\\Config\\": "src/Service/Config",
+            "Model\\Config\\": "src/Model/Config"
         }
     },
     "authors": [
@@ -19,5 +23,8 @@
 
     "require-dev": {
         "phpunit/phpunit": "11.5.x-dev"
+    },
+    "require": {
+        "smalot/pdfparser": "dev-master"
     }
 }

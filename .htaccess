@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# Ne irányítsuk át a src/Controller/main.php-t vagy annak aloldalait
+RewriteCond %{REQUEST_URI} ^/Hurycan/src/Controller/main.php
+RewriteRule ^.*$ - [L]
+
+# Ne irányítsuk át a src/View/ mappába tartozó fájlokat
+RewriteCond %{REQUEST_URI} !^/Hurycan/src/View/
+
+# Irányítsuk át minden egyéb kérést a 404.php-ra
+RewriteRule ^.*$ /Hurycan/src/View/404.php [L]

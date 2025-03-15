@@ -1,0 +1,178 @@
+<?php
+if ($argc > 1) {
+    switch ($argv[1]) {
+        case 'i':
+        case 'install':
+            install();
+            break;
+        case 'c':
+        case 'clear':
+            clear();
+            break;
+        case "a":
+        case "all":
+           clear();
+           install(); 
+        default:
+            echo "Unknown command. Use 'install' to setup the database.\n";
+            break;
+    }
+}
+
+function clear() {
+    $xml = simplexml_load_file(__DIR__ . '/../hurycan.xml');
+    if (!$xml) {
+        die("Failed to load configuration file.\n");
+    }
+
+    // Get database connection details
+    $dbConfig = $xml->xpath('//config[@type="db_con"]')[0];
+    $dbHost = (string) $dbConfig['db_host'];
+    $dbUser = (string) $dbConfig['db_user'];
+    $dbPass = (string) $dbConfig['db_pass'];
+    $dbPort = (string) $dbConfig['db_port'];
+    $dbType = (string) $dbConfig['db_type'];
+    
+    if ($dbType !== 'mysql') {
+        die("Unsupported database type: $dbType\n");
+    }
+
+    try {
+        // Establish the connection
+        $pdo = new PDO("mysql:host=$dbHost;port=$dbPort", $dbUser, $dbPass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+        ]);
+
+        // Get the database name from XML
+        $database = $xml->xpath('//Database')[0]['name'];
+        echo "Using database: $database\n";
+
+        // Switch to the correct database
+        $pdo->exec("USE `$database`;");
+
+        // Get all tables to drop
+        $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+
+        if (empty($tables)) {
+            echo "No tables to drop.\n";
+        } else {
+            foreach ($tables as $table) {
+                echo "Dropping table: $table\n";
+                try {
+                    $pdo->exec("DROP TABLE IF EXISTS `$table`;");
+                    echo "Table $table dropped successfully.\n";
+                } catch (PDOException $e) {
+                    echo "Error dropping table $table: " . $e->getMessage() . "\n";
+                }
+            }
+            echo "All tables dropped successfully.\n";
+        }
+
+    } catch (PDOException $e) {
+        echo "Error: " . $e->getMessage() . "\n";
+    }
+}
+
+
+function install() {
+    $xml = simplexml_load_file(__DIR__ . '/../hurycan.xml');
+    if (!$xml) {
+        die("Failed to load configuration file.\n");
+    }
+
+    // Get database connection details
+    $dbConfig = $xml->xpath('//config[@type="db_con"]')[0];
+    $dbHost = (string) $dbConfig['db_host'];
+    $dbUser = (string) $dbConfig['db_user'];
+    $dbPass = (string) $dbConfig['db_pass'];
+    $dbPort = (string) $dbConfig['db_port'];
+    $dbType = (string) $dbConfig['db_type'];
+
+    if ($dbType !== 'mysql') {
+        die("Unsupported database type: $dbType\n");
+    }
+
+    try {
+        // Establish the connection
+        $pdo = new PDO("mysql:host=$dbHost;port=$dbPort", $dbUser, $dbPass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+        ]);
+
+        // Get database name
+        $database = $xml->xpath('//Database')[0]['name'];
+        echo "Creating database: $database\n";
+        $pdo->exec("CREATE DATABASE IF NOT EXISTS `$database` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+        
+        $pdo->exec("USE `$database`;");
+
+        // Create tables
+        foreach ($xml->xpath('//Table') as $table) {
+            $tableName = (string) $table['name'];
+            echo "Creating table: $tableName\n";
+            
+            $columns = [];
+            $primaryKey = null;
+            foreach ($table->Columns->Column as $column) {
+                $type = (string) $column['type'];
+                $size = isset($column['size']) ? "({$column['size']})" : "";
+                if ($type === 'timestamp') {
+                    $size = ""; // timestamp has no size
+                }
+
+                $colDef = "`{$column['name']}` $type$size";
+                if ((string) $column['isnull'] === 'false') {
+                    $colDef .= " NOT NULL";
+                }
+                if ((string) $column['ai'] === 'true') {
+                    $colDef .= " AUTO_INCREMENT";
+                }
+                if ((string) $column['primary'] === 'true') {
+                    $primaryKey = (string) $column['name'];
+                }
+
+                if (isset($column['default'])) {
+                    $defaultValue = (string) $column['default'];
+                    if ($type === 'timestamp' && empty($defaultValue)) {
+                        $colDef .= " DEFAULT CURRENT_TIMESTAMP";
+                    } else {
+                        $colDef .= " DEFAULT '$defaultValue'";
+                    }
+                }
+
+                $columns[] = $colDef;
+            }
+
+            if ($primaryKey) {
+                $columns[] = "PRIMARY KEY (`$primaryKey`)";
+            }
+
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` (" . implode(", ", $columns) . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+            $pdo->exec($sql);
+        }
+
+        // Handle stored procedures
+        foreach ($xml->xpath('//StoreProcedures/StoreProcedure') as $sp) {
+            $spName = (string) $sp['name'];
+            $spSqlRef = (string) $sp['sql_referece'];
+            if (file_exists($spSqlRef)) {
+                $sql = file_get_contents($spSqlRef);
+                echo "Creating stored procedure: $spName\n";
+                try {
+                    $pdo->exec($sql);
+                    echo "Stored procedure $spName created successfully.\n";
+                } catch (PDOException $e) {
+                    echo "Error creating stored procedure $spName: " . $e->getMessage() . "\n";
+                }
+            } else {
+                echo "SQL file for stored procedure $spName not found: $spSqlRef\n";
+            }
+        }
+
+        echo "Database installation complete.\n";
+
+    } catch (PDOException $e) {
+        echo "Error: " . $e->getMessage() . "\n";
+    }
+}
+
+
