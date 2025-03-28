@@ -11,18 +11,18 @@ if ($argc > 1) {
             break;
         case "a":
         case "all":
-           clear();
-           install(); 
+            clear();
+            install(); 
+            break;
         default:
-            echo "Unknown command. Use 'install' to setup the database.\n";
+            echo "❌ Unknown command. Use 'install' to setup the database.\n";
             break;
     }
 }
-
 function clear() {
     $xml = simplexml_load_file(__DIR__ . '/../hurycan.xml');
     if (!$xml) {
-        die("Failed to load configuration file.\n");
+        die("❌ Failed to load configuration file.\n");
     }
 
     // Get database connection details
@@ -34,7 +34,7 @@ function clear() {
     $dbType = (string) $dbConfig['db_type'];
     
     if ($dbType !== 'mysql') {
-        die("Unsupported database type: $dbType\n");
+        die("❌ Unsupported database type: $dbType\n");
     }
 
     try {
@@ -45,39 +45,123 @@ function clear() {
 
         // Get the database name from XML
         $database = $xml->xpath('//Database')[0]['name'];
-        echo "Using database: $database\n";
+        echo "🔧 Using database: $database\n";
 
         // Switch to the correct database
         $pdo->exec("USE `$database`;");
 
-        // Get all tables to drop
-        $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
-
-        if (empty($tables)) {
-            echo "No tables to drop.\n";
-        } else {
-            foreach ($tables as $table) {
-                echo "Dropping table: $table\n";
+        // Drop all stored procedures
+        $procedures = $pdo->query("SHOW PROCEDURE STATUS WHERE Db = '$database'")->fetchAll(PDO::FETCH_ASSOC);
+        if ($procedures) {
+            foreach ($procedures as $proc) {
+                echo "⛔ Dropping stored procedure: {$proc['Name']}\n";
                 try {
-                    $pdo->exec("DROP TABLE IF EXISTS `$table`;");
-                    echo "Table $table dropped successfully.\n";
+                    $pdo->exec("DROP PROCEDURE IF EXISTS {$proc['Name']};");
+                    echo "✅ Stored procedure {$proc['Name']} dropped successfully.\n";
                 } catch (PDOException $e) {
-                    echo "Error dropping table $table: " . $e->getMessage() . "\n";
+                    echo "❌ Error dropping stored procedure {$proc['Name']}: " . $e->getMessage() . "\n";
                 }
             }
-            echo "All tables dropped successfully.\n";
+        } else {
+            echo "⚠️ No stored procedures to drop.\n";
         }
 
+        // Get all tables to drop
+        $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+        if (empty($tables)) {
+            echo "⚠️ No tables to drop.\n";
+        } else {
+            foreach ($tables as $table) {
+                echo "⛔ Dropping table: $table\n";
+                try {
+                    $pdo->exec("DROP TABLE IF EXISTS `$table`;");
+                    echo "✅ Table $table dropped successfully.\n";
+                } catch (PDOException $e) {
+                    echo "❌ Error dropping table $table: " . $e->getMessage() . "\n";
+                }
+            }
+            echo "✅ All tables dropped successfully.\n";
+        }
+
+        // Create tables from XML
+        echo "🔨 Creating tables...\n";
+        foreach ($xml->xpath('//Database/Tables/Table') as $table) {
+            $tableName = (string) $table['name'];
+            $columns = [];
+            $primaryKey = null;
+            foreach ($table->Columns->Column as $column) {
+                $type = (string) $column['type'];
+                $size = isset($column['size']) ? "({$column['size']})" : "";
+                if ($type === 'timestamp') {
+                    $size = ""; // timestamp has no size
+                }
+
+                $colDef = "`{$column['name']}` $type$size";
+                if ((string) $column['isnull'] === 'false') {
+                    $colDef .= " NOT NULL";
+                }
+                if ((string) $column['ai'] === 'true') {
+                    $colDef .= " AUTO_INCREMENT";
+                }
+                if ((string) $column['primary'] === 'true') {
+                    $primaryKey = (string) $column['name'];
+                }
+
+                if (isset($column['default'])) {
+                    $defaultValue = (string) $column['default'];
+                    if ($type === 'timestamp' && empty($defaultValue)) {
+                        $colDef .= " DEFAULT CURRENT_TIMESTAMP";
+                    } else {
+                        $colDef .= " DEFAULT '$defaultValue'";
+                    }
+                }
+
+                $columns[] = $colDef;
+            }
+
+            if ($primaryKey) {
+                $columns[] = "PRIMARY KEY (`$primaryKey`)";
+            }
+
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` (" . implode(", ", $columns) . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+            $pdo->exec($sql);
+            echo "✅ Table $tableName created successfully.\n";
+        }
+
+        // Handle stored procedures
+        foreach ($xml->xpath('//StoreProcedures/StoreProcedure') as $sp) {
+            $spName = (string) $sp['name'];
+            $spSqlRef = (string) $sp['sql_referece'];
+            if (file_exists($spSqlRef)) {
+                $sql = file_get_contents($spSqlRef);
+                echo "🔧 Creating stored procedure: $spName\n";
+                try {
+                    // Drop the stored procedure if it already exists
+                    $pdo->exec("DROP PROCEDURE IF EXISTS `$spName`;");
+                    // Now create it again
+                    $pdo->exec($sql);
+                    echo "✅ Stored procedure $spName created successfully.\n";
+                } catch (PDOException $e) {
+                    echo "❌ Error creating stored procedure $spName: " . $e->getMessage() . "\n";
+                }
+            } else {
+                echo "❌ SQL file for stored procedure $spName not found: $spSqlRef\n";
+            }
+        }
+
+        echo "✅ Database reset and creation complete.\n";
+
     } catch (PDOException $e) {
-        echo "Error: " . $e->getMessage() . "\n";
+        echo "❌ Error: " . $e->getMessage() . "\n";
     }
 }
+
 
 
 function install() {
     $xml = simplexml_load_file(__DIR__ . '/../hurycan.xml');
     if (!$xml) {
-        die("Failed to load configuration file.\n");
+        die("❌ Failed to load configuration file.\n");
     }
 
     // Get database connection details
@@ -89,7 +173,7 @@ function install() {
     $dbType = (string) $dbConfig['db_type'];
 
     if ($dbType !== 'mysql') {
-        die("Unsupported database type: $dbType\n");
+        die("❌ Unsupported database type: $dbType\n");
     }
 
     try {
@@ -100,7 +184,7 @@ function install() {
 
         // Get database name
         $database = $xml->xpath('//Database')[0]['name'];
-        echo "Creating database: $database\n";
+        echo "🔧 Creating database: $database\n";
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `$database` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
         
         $pdo->exec("USE `$database`;");
@@ -108,7 +192,7 @@ function install() {
         // Create tables
         foreach ($xml->xpath('//Table') as $table) {
             $tableName = (string) $table['name'];
-            echo "Creating table: $tableName\n";
+            echo "🔨 Creating table: $tableName\n";
             
             $columns = [];
             $primaryKey = null;
@@ -156,23 +240,21 @@ function install() {
             $spSqlRef = (string) $sp['sql_referece'];
             if (file_exists($spSqlRef)) {
                 $sql = file_get_contents($spSqlRef);
-                echo "Creating stored procedure: $spName\n";
+                echo "🔧 Creating stored procedure: $spName\n";
                 try {
                     $pdo->exec($sql);
-                    echo "Stored procedure $spName created successfully.\n";
+                    echo "✅ Stored procedure $spName created successfully.\n";
                 } catch (PDOException $e) {
-                    echo "Error creating stored procedure $spName: " . $e->getMessage() . "\n";
+                    echo "❌ Error creating stored procedure $spName: " . $e->getMessage() . "\n";
                 }
             } else {
-                echo "SQL file for stored procedure $spName not found: $spSqlRef\n";
+                echo "❌ SQL file for stored procedure $spName not found: $spSqlRef\n";
             }
         }
 
-        echo "Database installation complete.\n";
+        echo "✅ Database installation complete.\n";
 
     } catch (PDOException $e) {
-        echo "Error: " . $e->getMessage() . "\n";
+        echo "❌ Error: " . $e->getMessage() . "\n";
     }
 }
-
-

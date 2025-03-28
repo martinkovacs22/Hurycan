@@ -25,6 +25,14 @@
                     <Column name="at_create" type="timestamp" isnull="false" default=""/>
                 </Columns>
             </Table>
+            <Table name="test_post">
+                <Columns>
+                    <Column name="id" type="int" size="11" ai="true" isnull="false" primary="true"/>
+                    <Column name="filename" type="varchar" size="255" isnull="false"/>
+                    <Column name="status" type="tinyint" size="1" isnull="false" default="0"/>
+                    <Column name="at_create" type="timestamp" isnull="false" default=""/>
+                </Columns>
+            </Table>
         </Tables>
         <StoreProcedures>
             <StoreProcedure name="login" sql_referece="./src/Database/login.sql"/>

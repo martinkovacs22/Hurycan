@@ -9,3 +9,14 @@ RewriteCond %{REQUEST_URI} !^/Hurycan/src/View/
 
 # Irányítsuk át minden egyéb kérést a 404.php-ra
 RewriteRule ^.*$ /Hurycan/src/View/404.php [L]
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Ne alkalmazza a szabályokat létező fájlokra és könyvtárakra
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # Minden egyéb kérést irányítson át az index.html-re
+  RewriteRule ^ index.html [L]
+</IfModule>
